@@ -290,19 +290,6 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "FreeJobGN API",
     "DESCRIPTION": """
 ## API REST pour la plateforme FreeJobGN
-
-### Authentification
-
-Cette API utilise JWT (JSON Web Tokens) pour l'authentification.
-
-**Workflow:**
-1. **Inscription** (`POST /api/auth/register/`) - Crée un compte inactif
-2. **Activation** (`POST /api/auth/activate/`) - Active le compte via le lien email
-3. **Connexion** (`POST /api/auth/login/`) - Obtient un access token
-4. **Accès API** - Utiliser `Authorization: Bearer <access_token>`
-5. **Refresh** (`POST /api/auth/token/refresh/`) - Renouvelle l'access token
-
-**Note:** Le refresh token est stocké dans un cookie HttpOnly pour la sécurité.
     """,
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,

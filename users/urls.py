@@ -16,6 +16,18 @@ from .views import (
     PublicStatsView,
 )
 
+from .views import (
+    FreelanceProfileInitView,
+    FreelanceMeProfileView,
+    FreelancePublicListView,
+    FreelancePublicDetailView,
+)
+
+from .views import (
+    FreelanceDocumentListCreateView,
+    FreelanceDocumentDetailView,
+)
+
 app_name = "users"
 
 urlpatterns = [
@@ -36,4 +48,15 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
     # Utilisateur courant
     path("me/", MeView.as_view(), name="me"),
+
+     path("freelance/profile/init/", FreelanceProfileInitView.as_view(), name="freelance-profile-init"),
+    path("freelance/profile/", FreelanceMeProfileView.as_view(), name="freelance-profile-me"),
+
+    # public
+    path("freelancers/", FreelancePublicListView.as_view(), name="freelancers-public-list"),
+    path("freelancers/<int:pk>/", FreelancePublicDetailView.as_view(), name="freelancers-public-detail"),
+
+     path("freelance/documents/", FreelanceDocumentListCreateView.as_view(), name="freelance-documents"),
+    path("freelance/documents/<int:pk>/", FreelanceDocumentDetailView.as_view(), name="freelance-document-detail"),
+
 ]

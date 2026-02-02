@@ -32,7 +32,16 @@ from .serializers import (
 )
 from .tokens import activation_token_generator, decode_uid
 from .emails import send_activation_email
-from .models import UserRole, ProviderKind
+from .models import UserRole, ProviderKind, ProviderProfile
+
+from rest_framework.generics import CreateAPIView, RetrieveUpdateAPIView, ListAPIView, RetrieveAPIView
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from .permissions import IsFreelance
+from .serializers import ProviderProfileFreelanceSerializer
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from .models import FreelanceDocument, FreelanceDocumentType
+from .serializers import FreelanceDocumentSerializer
 
 User = get_user_model()
 
@@ -612,3 +621,264 @@ class PublicStatsView(APIView):
         }
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+
+@extend_schema(tags=["Freelance Profile"])
+class FreelanceProfileInitView(CreateAPIView):
+    """
+    Création initiale du profil freelance (ProviderProfile + FreelanceDetails).
+    """
+    permission_classes = [IsFreelance]
+    serializer_class = ProviderProfileFreelanceSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Initialiser mon profil freelance",
+        description="Crée ProviderProfile + FreelanceDetails pour l'utilisateur connecté (FREELANCE).",
+        responses={
+            201: ProviderProfileFreelanceSerializer,
+            400: OpenApiResponse(description="Erreur de validation"),
+            409: OpenApiResponse(description="Profil déjà existant"),
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        if hasattr(request.user, "provider_profile"):
+            return Response({"detail": "Profil déjà existant."}, status=status.HTTP_409_CONFLICT)
+        return super().post(request, *args, **kwargs)
+
+
+@extend_schema(tags=["Freelance Profile"])
+class FreelanceMeProfileView(RetrieveUpdateAPIView):
+    """
+    Récupérer / modifier mon profil freelance.
+    """
+    permission_classes = [IsFreelance]
+    serializer_class = ProviderProfileFreelanceSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_object(self):
+        # 404 si non initialisé
+        return (
+            ProviderProfile.objects
+            .select_related("user", "speciality", "freelance_details")
+            .prefetch_related("skills")
+            .get(user=self.request.user)
+        )
+
+    @extend_schema(
+        summary="Lire mon profil freelance",
+        responses={200: ProviderProfileFreelanceSerializer, 404: OpenApiResponse(description="Profil non initialisé")},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Mettre à jour mon profil freelance",
+        description="PATCH recommandé. Supporte profile_picture via multipart/form-data.",
+        responses={200: ProviderProfileFreelanceSerializer, 400: OpenApiResponse(description="Erreur de validation")},
+    )
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+
+
+# ---------------------------
+# Public browsing (clients)
+# ---------------------------
+
+@extend_schema(tags=["Freelancers Public"])
+class FreelancePublicListView(ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ProviderProfileFreelanceSerializer
+
+    def get_queryset(self):
+        qs = (
+            ProviderProfile.objects
+            .select_related("user", "speciality", "freelance_details")
+            .prefetch_related("skills")
+            .filter(
+                user__is_active=True,
+                user__role=UserRole.PROVIDER,
+                user__provider_kind=ProviderKind.FREELANCE,
+            )
+            .distinct()
+            .order_by("-updated_at")
+        )
+
+        country = self.request.query_params.get("country")
+        city = self.request.query_params.get("city")
+        speciality_id = self.request.query_params.get("speciality_id")
+        skill_id = self.request.query_params.get("skill_id")
+
+        if country:
+            qs = qs.filter(country__iexact=country)
+        if city:
+            qs = qs.filter(city_or_region__icontains=city)
+        if speciality_id:
+            qs = qs.filter(speciality_id=speciality_id)
+        if skill_id:
+            qs = qs.filter(skills__id=skill_id)
+
+        return qs
+
+    @extend_schema(
+        summary="Lister les freelances (public)",
+        parameters=[
+            OpenApiParameter(name="country", required=False, type=str),
+            OpenApiParameter(name="city", required=False, type=str),
+            OpenApiParameter(name="speciality_id", required=False, type=int),
+            OpenApiParameter(name="skill_id", required=False, type=int),
+        ],
+        responses={200: ProviderProfileFreelanceSerializer(many=True)},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+@extend_schema(tags=["Freelancers Public"])
+class FreelancePublicDetailView(RetrieveAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ProviderProfileFreelanceSerializer
+    lookup_field = "pk"
+
+    def get_queryset(self):
+        return (
+            ProviderProfile.objects
+            .select_related("user", "speciality", "freelance_details")
+            .prefetch_related("skills")
+            .filter(
+                user__is_active=True,
+                user__role=UserRole.PROVIDER,
+                user__provider_kind=ProviderKind.FREELANCE,
+            )
+        )
+
+    @extend_schema(
+        summary="Détail d’un freelance (public)",
+        responses={200: ProviderProfileFreelanceSerializer, 404: OpenApiResponse(description="Not found")},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@extend_schema(tags=["Freelance Documents"])
+class FreelanceDocumentListCreateView(ListCreateAPIView):
+    """
+    Lister + uploader les documents du freelance connecté.
+    """
+    permission_classes = [IsAuthenticated, IsFreelance]
+    serializer_class = FreelanceDocumentSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        return (
+            FreelanceDocument.objects
+            .select_related("provider_profile", "provider_profile__user")
+            .filter(provider_profile__user=self.request.user)
+            .order_by("-created_at")
+        )
+
+    @extend_schema(
+        summary="Lister mes documents (freelance)",
+        parameters=[
+            OpenApiParameter(
+                name="doc_type",
+                required=False,
+                type=str,
+                description="Filtrer par type (ex: CV, CERTIFICATION, PORTFOLIO...)",
+            ),
+        ],
+        responses={200: FreelanceDocumentSerializer(many=True)},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        doc_type = request.query_params.get("doc_type")
+        if doc_type:
+            qs = qs.filter(doc_type=doc_type)
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Uploader un document (freelance)",
+        description=(
+            "Upload en multipart/form-data.\n\n"
+            "Champs requis: doc_type, file.\n"
+            "Champs optionnels: title, reference_number, issued_at."
+        ),
+        responses={
+            201: FreelanceDocumentSerializer,
+            400: OpenApiResponse(description="Erreur de validation"),
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        # on force le rattachement au freelance connecté
+        provider_profile = self.request.user.provider_profile
+        serializer.save(provider_profile=provider_profile)
+
+
+@extend_schema(tags=["Freelance Documents"])
+class FreelanceDocumentDetailView(RetrieveUpdateDestroyAPIView):
+    """
+    Lire / modifier / supprimer un document appartenant au freelance connecté.
+    """
+    permission_classes = [IsAuthenticated, IsFreelance]
+    serializer_class = FreelanceDocumentSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        # sécurité: accès uniquement aux docs du user connecté
+        return FreelanceDocument.objects.filter(provider_profile__user=self.request.user)
+
+    @extend_schema(
+        summary="Détail d’un document (freelance)",
+        responses={200: FreelanceDocumentSerializer, 404: OpenApiResponse(description="Not found")},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Mettre à jour un document (freelance)",
+        description="PATCH recommandé. Tu peux remplacer le file si tu veux, ou juste title/reference_number/issued_at.",
+        responses={200: FreelanceDocumentSerializer, 400: OpenApiResponse(description="Erreur de validation")},
+    )
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Supprimer un document (freelance)",
+        responses={204: OpenApiResponse(description="Deleted")},
+    )
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
