@@ -323,12 +323,15 @@ Cette API utilise JWT (JSON Web Tokens) pour l'authentification.
     ],
     # Sécurité JWT pour Swagger
     "SECURITY": [{"BearerAuth": []}],
-    "SECURITY_DEFINITIONS": {
-        "BearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT",
-        }
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "Token JWT obtenu via POST /api/auth/login/",
+            },
+        },
     },
 }
 
@@ -359,3 +362,9 @@ LOGGING = {
         },
     },
 }
+
+SPECTACULAR_SETTINGS.update({
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
+})
