@@ -25,14 +25,39 @@ def upload_to_user_dir(instance, filename: str) -> str:
     """
     Stockage simple et stable pour médias.
     Ex: users/42/avatar.png
+
+    Gère aussi les cas où le modèle ne porte pas directement provider_profile_id / client_profile_id :
+    - AgencyDocument -> instance.agency.provider_profile.user_id
+    - ClientCompanyDocument -> instance.company.client_profile.user_id
     """
     user_id = None
-    if hasattr(instance, "user_id"):
-        user_id = instance.user_id
-    elif hasattr(instance, "provider_profile_id") and instance.provider_profile_id:
+
+    # 1) Cas direct: instance a un user_id (rare mais possible)
+    direct_user_id = getattr(instance, "user_id", None)
+    if direct_user_id:
+        user_id = direct_user_id
+
+    # 2) Cas standard: instance liée à un ProviderProfile
+    elif getattr(instance, "provider_profile_id", None):
+        # provider_profile est un FK/OneToOne vers ProviderProfile
         user_id = instance.provider_profile.user_id
-    elif hasattr(instance, "client_profile_id") and instance.client_profile_id:
+
+    # 3) Cas standard: instance liée à un ClientProfile
+    elif getattr(instance, "client_profile_id", None):
         user_id = instance.client_profile.user_id
+
+    # 4) Cas AgencyDocument: instance.agency -> AgencyDetails -> provider_profile -> user
+    elif getattr(instance, "agency_id", None):
+        agency = getattr(instance, "agency", None)
+        if agency and getattr(agency, "provider_profile_id", None):
+            user_id = agency.provider_profile.user_id
+
+    # 5) Cas ClientCompanyDocument: instance.company -> ClientCompanyDetails -> client_profile -> user
+    elif getattr(instance, "company_id", None):
+        company = getattr(instance, "company", None)
+        if company and getattr(company, "client_profile_id", None):
+            user_id = company.client_profile.user_id
+
     return f"users/{user_id or 'unknown'}/{filename}"
 
 
@@ -182,7 +207,7 @@ class ProviderProfile(TimeStampedModel):
         null=True,
     )
 
-    bio = models.TextField(validators=[validate_no_external_contact])
+    bio = models.TextField(blank=True, validators=[validate_no_external_contact])  # ✅ onboarding progressif
     hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     city_or_region = models.CharField(max_length=120, db_index=True)
@@ -363,7 +388,6 @@ class FreelanceDocument(TimeStampedModel):
         return f"{self.provider_profile.user.username} • {self.doc_type}"
 
 
-
 # ============================================================
 # Client (profil commun + sous-types)
 # ============================================================
@@ -436,7 +460,8 @@ class ClientCompanyDetails(TimeStampedModel):
 
     def clean(self):
         super().clean()
-        if not self.client_profile or not self.client_profile.client_type != ClientType.COMPANY:
+        # ✅ correction logique (avant: inversion + risque de lever alors que ça ne devrait pas)
+        if not self.client_profile or self.client_profile.client_type != ClientType.COMPANY:
             raise ValidationError("ClientCompanyDetails réservé aux clients COMPANY.")
 
     def __str__(self) -> str:
@@ -467,4 +492,3 @@ class ClientCompanyDocument(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.company.company_name} • {self.doc_type}"
-
