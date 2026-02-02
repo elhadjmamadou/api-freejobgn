@@ -37,7 +37,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'users',
+
+    # Third-party
+    'rest_framework',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
 ]
+
+# Custom user model
+AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -115,3 +124,39 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+REST_FRAMEWORK = {
+    # IMPORTANT pour drf-spectacular
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+
+    # (Optionnel) Si tu veux déjà une base propre:
+    # 'DEFAULT_AUTHENTICATION_CLASSES': (
+    #     'rest_framework.authentication.SessionAuthentication',
+    # ),
+    # 'DEFAULT_PERMISSION_CLASSES': (
+    #     'rest_framework.permissions.IsAuthenticated',
+    # ),
+}
+
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': ' FreeJobGN API',
+    'DESCRIPTION': "Documentation OpenAPI de l'API FreeJobGN",
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+
+    # Recommandé: meilleure précision des schémas request vs response
+    'COMPONENT_SPLIT_REQUEST': True,
+
+    # Recommandé si tu montes toutes tes routes sous /api/
+    'SCHEMA_PATH_PREFIX': r'/api',
+
+    # Swagger UI: options utiles
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,     # garde le token quand tu refresh
+        'displayOperationId': False,
+        'filter': True,                  # barre de recherche dans Swagger
+    },
+}
+
