@@ -1,0 +1,579 @@
+openapi: 3.0.3
+info:
+  title: FreeJobGN API
+  version: 1.0.0
+  description: "\n## API REST pour la plateforme FreeJobGN\n\n### Authentification\n\nCette
+    API utilise JWT (JSON Web Tokens) pour l'authentification.\n\n**Workflow:**\n1.
+    **Inscription** (`POST /api/auth/register/`) - Crée un compte inactif\n2. **Activation**
+    (`POST /api/auth/activate/`) - Active le compte via le lien email\n3. **Connexion**
+    (`POST /api/auth/login/`) - Obtient un access token\n4. **Accès API** - Utiliser
+    `Authorization: Bearer <access_token>`\n5. **Refresh** (`POST /api/auth/token/refresh/`)
+    - Renouvelle l'access token\n\n**Note:** Le refresh token est stocké dans un cookie
+    HttpOnly pour la sécurité.\n    "
+paths:
+  /api/auth/activate/:
+    post:
+      operationId: auth_activate_create
+      description: Active le compte utilisateur avec le token reçu par email.
+      summary: Activation du compte
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActivationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActivationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/auth/login/:
+    post:
+      operationId: auth_login_create
+      description: Authentifie l'utilisateur et retourne les tokens JWT.
+      summary: Connexion
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      description: Déconnecte l'utilisateur et supprime le refresh token.
+      summary: Déconnexion
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+          description: ''
+  /api/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      description: Retourne les informations de l'utilisateur authentifié.
+      summary: Utilisateur courant
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMe'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/auth/public/stats/:
+    get:
+      operationId: auth_public_stats_retrieve
+      description: Retourne des statistiques publiques sur les utilisateurs. Endpoint
+        public sans authentification.
+      summary: Statistiques publiques
+      tags:
+      - Public Metadata
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicStats'
+          description: ''
+  /api/auth/register/:
+    post:
+      operationId: auth_register_create
+      description: Crée un nouveau compte utilisateur. Un email d'activation est envoyé.
+      summary: Inscription utilisateur
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+        '400':
+          description: Erreur de validation
+  /api/auth/register/options/:
+    get:
+      operationId: auth_register_options_retrieve
+      description: 'Retourne les options disponibles pour l''inscription: rôles, types
+        de prestataire, et règles de validation. Endpoint public sans authentification.'
+      summary: Options d'inscription
+      tags:
+      - Public Metadata
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationOptions'
+          description: ''
+  /api/auth/resend-activation/:
+    post:
+      operationId: auth_resend_activation_create
+      description: Renvoie l'email d'activation si le compte existe et n'est pas activé.
+      summary: Renvoyer l'email d'activation
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendActivationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResendActivationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResendActivationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResendActivationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+  /api/auth/token/refresh/:
+    post:
+      operationId: auth_token_refresh_create
+      description: Génère un nouveau access token à partir du refresh token (cookie).
+      summary: Rafraîchir le token
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: ''
+components:
+  schemas:
+    ActivationRequest:
+      type: object
+      description: Serializer pour l'activation du compte.
+      properties:
+        uid:
+          type: string
+          minLength: 1
+          description: Identifiant utilisateur encodé en base64
+        token:
+          type: string
+          minLength: 1
+          description: Token d'activation signé
+      required:
+      - token
+      - uid
+    ActivationResponse:
+      type: object
+      description: Serializer pour la réponse d'activation.
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    BlankEnum:
+      enum:
+      - ''
+    ChoiceItem:
+      type: object
+      description: Représente un choix (value + label).
+      properties:
+        value:
+          type: string
+          description: Valeur technique
+        label:
+          type: string
+          description: Libellé affiché
+      required:
+      - label
+      - value
+    ErrorResponse:
+      type: object
+      description: Serializer générique pour les erreurs.
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    LoginRequest:
+      type: object
+      description: Serializer pour la connexion.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: Email de l'utilisateur
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Mot de passe
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      description: Serializer pour la réponse de connexion.
+      properties:
+        access:
+          type: string
+          description: JWT Access Token
+        user:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+      required:
+      - access
+      - user
+    LogoutResponse:
+      type: object
+      description: Serializer pour la réponse de déconnexion.
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    NullEnum:
+      enum:
+      - null
+    ProviderKindEnum:
+      enum:
+      - FREELANCE
+      - AGENCY
+      type: string
+      description: |-
+        * `FREELANCE` - Freelance
+        * `AGENCY` - Agence
+    PublicStats:
+      type: object
+      description: Statistiques publiques pour la landing page.
+      properties:
+        clients_count:
+          type: integer
+          description: Nombre de clients inscrits
+        providers_count:
+          type: integer
+          description: Nombre de prestataires inscrits
+        freelances_count:
+          type: integer
+          description: Nombre de freelances
+        agencies_count:
+          type: integer
+          description: Nombre d'agences
+      required:
+      - agencies_count
+      - clients_count
+      - freelances_count
+      - providers_count
+    RegisterRequest:
+      type: object
+      description: Serializer pour l'inscription d'un nouvel utilisateur.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: Adresse email unique de l'utilisateur
+        username:
+          type: string
+          minLength: 3
+          description: Nom d'utilisateur unique
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Mot de passe (minimum 8 caractères, avec complexité)
+        password_confirm:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Confirmation du mot de passe
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          description: |-
+            Rôle: CLIENT ou PROVIDER
+
+            * `CLIENT` - Client
+            * `PROVIDER` - Prestataire
+        provider_kind:
+          nullable: true
+          description: |-
+            Type de prestataire: FREELANCE ou AGENCY (requis si role=PROVIDER)
+
+            * `FREELANCE` - Freelance
+            * `AGENCY` - Agence
+          oneOf:
+          - $ref: '#/components/schemas/ProviderKindEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - email
+      - password
+      - password_confirm
+      - role
+      - username
+    RegisterResponse:
+      type: object
+      description: Serializer pour la réponse d'inscription.
+      properties:
+        message:
+          type: string
+        needs_activation:
+          type: boolean
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      - message
+      - needs_activation
+    RegistrationOptions:
+      type: object
+      description: |-
+        Options d'inscription disponibles pour le frontend.
+        Permet d'afficher la page "Choisis ton rôle" côté React.
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChoiceItem'
+          description: Liste des rôles disponibles
+        provider_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChoiceItem'
+          description: Liste des types de prestataire
+        rules:
+          allOf:
+          - $ref: '#/components/schemas/RegistrationRules'
+          description: Règles de validation role/provider_kind
+      required:
+      - provider_kinds
+      - roles
+      - rules
+    RegistrationRules:
+      type: object
+      description: Règles de validation pour l'inscription.
+      properties:
+        provider_kind_required_if_role:
+          type: string
+          description: Role pour lequel provider_kind est requis
+        provider_kind_forbidden_if_role:
+          type: string
+          description: Role pour lequel provider_kind est interdit
+      required:
+      - provider_kind_forbidden_if_role
+      - provider_kind_required_if_role
+    ResendActivationRequest:
+      type: object
+      description: Serializer pour renvoyer l'email d'activation.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          description: Email du compte à activer
+      required:
+      - email
+    ResendActivationResponse:
+      type: object
+      description: Serializer pour la réponse de renvoi d'activation.
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    RoleEnum:
+      enum:
+      - CLIENT
+      - PROVIDER
+      type: string
+      description: |-
+        * `CLIENT` - Client
+        * `PROVIDER` - Prestataire
+    TokenRefreshResponse:
+      type: object
+      description: Serializer pour la réponse de refresh token.
+      properties:
+        access:
+          type: string
+          description: Nouveau JWT Access Token
+      required:
+      - access
+    UserMe:
+      type: object
+      description: Serializer pour les informations de l'utilisateur connecté.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Adresse e-mail
+        username:
+          type: string
+          readOnly: true
+          title: Nom d’utilisateur
+          description: Requis. 150 caractères maximum. Uniquement des lettres, nombres
+            et les caractères « @ », « . », « + », « - » et « _ ».
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        provider_kind:
+          readOnly: true
+          nullable: true
+          description: |-
+            Uniquement si role=PROVIDER
+
+            * `FREELANCE` - Freelance
+            * `AGENCY` - Agence
+          oneOf:
+          - $ref: '#/components/schemas/ProviderKindEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Actif
+          description: Précise si l’utilisateur doit être considéré comme actif. Décochez
+            ceci plutôt que de supprimer le compte.
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Date d’inscription
+      required:
+      - date_joined
+      - email
+      - id
+      - is_active
+      - provider_kind
+      - role
+      - username
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+- name: Authentication
+  description: Inscription, connexion, activation

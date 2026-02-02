@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Activez votre compte - {{ site_name }}</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 40px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .logo {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .logo h1 {
+        color: #2563eb;
+        margin: 0;
+        font-size: 28px;
+      }
+      h2 {
+        color: #1f2937;
+        margin-top: 0;
+      }
+      .button {
+        display: inline-block;
+        background-color: #2563eb;
+        color: #ffffff !important;
+        text-decoration: none;
+        padding: 14px 28px;
+        border-radius: 6px;
+        font-weight: 600;
+        margin: 20px 0;
+      }
+      .button:hover {
+        background-color: #1d4ed8;
+      }
+      .footer {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #e5e7eb;
+        font-size: 14px;
+        color: #6b7280;
+      }
+      .warning {
+        background-color: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        padding: 12px 16px;
+        margin: 20px 0;
+        border-radius: 0 4px 4px 0;
+      }
+      .link-fallback {
+        word-break: break-all;
+        font-size: 12px;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="logo">
+        <h1>🚀 {{ site_name }}</h1>
+      </div>
+
+      <h2>Bienvenue, {{ user.username }} !</h2>
+
+      <p>Merci de vous être inscrit sur <strong>{{ site_name }}</strong>.</p>
+
+      <p>
+        Pour activer votre compte et commencer à utiliser notre plateforme,
+        cliquez sur le bouton ci-dessous :
+      </p>
+
+      <p style="text-align: center">
+        <a href="{{ activation_url }}" class="button">Activer mon compte</a>
+      </p>
+
+      <div class="warning">
+        <strong>⏰ Important :</strong> Ce lien expire dans
+        <strong>{{ expiry_hours }} heures</strong>.
+      </div>
+
+      <p class="link-fallback">
+        Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre
+        navigateur :<br />
+        <a href="{{ activation_url }}">{{ activation_url }}</a>
+      </p>
+
+      <div class="footer">
+        <p>
+          Si vous n'avez pas créé de compte sur {{ site_name }}, vous pouvez
+          ignorer cet email en toute sécurité.
+        </p>
+        <p>Cordialement,<br /><strong>L'équipe {{ site_name }}</strong></p>
+      </div>
+    </div>
+  </body>
+</html>
