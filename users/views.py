@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
 from .serializers import (
     RegisterSerializer,
@@ -510,7 +510,32 @@ class RegistrationOptionsView(APIView):
 
     @extend_schema(
         responses={
-            200: RegistrationOptionsSerializer,
+            200: OpenApiResponse(
+                response=RegistrationOptionsSerializer,
+                description="Options d'inscription récupérées avec succès.",
+                examples=[
+                    OpenApiExample(
+                        name="Exemple de réponse",
+                        summary="Options d'inscription complètes",
+                        description="Retourne les rôles, types de prestataire et règles de validation.",
+                        value={
+                            "roles": [
+                                {"value": "CLIENT", "label": "Client"},
+                                {"value": "PROVIDER", "label": "Prestataire"},
+                            ],
+                            "provider_kinds": [
+                                {"value": "FREELANCE", "label": "Freelance"},
+                                {"value": "AGENCY", "label": "Agence"},
+                            ],
+                            "rules": {
+                                "provider_kind_required_if_role": "PROVIDER",
+                                "provider_kind_forbidden_if_role": "CLIENT",
+                            },
+                        },
+                        response_only=True,
+                    ),
+                ],
+            ),
         },
         summary="Options d'inscription",
         description=(

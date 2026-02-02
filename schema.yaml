@@ -199,7 +199,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegistrationOptions'
-          description: ''
+              examples:
+                ExempleDeRéponse:
+                  value:
+                    roles:
+                    - value: CLIENT
+                      label: Client
+                    - value: PROVIDER
+                      label: Prestataire
+                    provider_kinds:
+                    - value: FREELANCE
+                      label: Freelance
+                    - value: AGENCY
+                      label: Agence
+                    rules:
+                      provider_kind_required_if_role: PROVIDER
+                      provider_kind_forbidden_if_role: CLIENT
+                  summary: Options d'inscription complètes
+                  description: Retourne les rôles, types de prestataire et règles
+                    de validation.
+          description: Options d'inscription récupérées avec succès.
   /api/auth/resend-activation/:
     post:
       operationId: auth_resend_activation_create
