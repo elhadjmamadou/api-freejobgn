@@ -29,6 +29,9 @@ SECRET_KEY = config(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config("DEBUG", default=True, cast=bool)
 
+# Flag pour désactiver le throttling en tests
+TESTING = config("TESTING", default=False, cast=bool)
+
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
 
@@ -255,9 +258,13 @@ CORS_ALLOW_METHODS = [
 # Email Configuration
 # ============================================================
 
-EMAIL_BACKEND = config(
-    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
-)
+# En mode TESTING, on utilise le backend locmem pour capturer les emails
+if TESTING:
+    EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+else:
+    EMAIL_BACKEND = config(
+        "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+    )
 EMAIL_HOST = config("EMAIL_HOST", default="localhost")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
@@ -290,19 +297,6 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "FreeJobGN API",
     "DESCRIPTION": """
 ## API REST pour la plateforme FreeJobGN
-
-### Authentification
-
-Cette API utilise JWT (JSON Web Tokens) pour l'authentification.
-
-**Workflow:**
-1. **Inscription** (`POST /api/auth/register/`) - Crée un compte inactif
-2. **Activation** (`POST /api/auth/activate/`) - Active le compte via le lien email
-3. **Connexion** (`POST /api/auth/login/`) - Obtient un access token
-4. **Accès API** - Utiliser `Authorization: Bearer <access_token>`
-5. **Refresh** (`POST /api/auth/token/refresh/`) - Renouvelle l'access token
-
-**Note:** Le refresh token est stocké dans un cookie HttpOnly pour la sécurité.
     """,
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,

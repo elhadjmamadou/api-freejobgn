@@ -16,6 +16,28 @@ from .views import (
     PublicStatsView,
 )
 
+from .views import (
+    FreelanceProfileInitView,
+    FreelanceMeProfileView,
+    FreelancePublicListView,
+    FreelancePublicDetailView,
+)
+
+from .views import (
+    FreelanceDocumentListCreateView,
+    FreelanceDocumentDetailView,
+)
+
+
+from .views import (
+    AgencyProfileInitView,
+    AgencyMeProfileView,
+    AgencyPublicListView,
+    AgencyPublicDetailView,
+    AgencyDocumentListCreateView,
+    AgencyDocumentDetailView,
+)
+
 app_name = "users"
 
 urlpatterns = [
@@ -36,4 +58,27 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
     # Utilisateur courant
     path("me/", MeView.as_view(), name="me"),
+
+     path("freelance/profile/init/", FreelanceProfileInitView.as_view(), name="freelance-profile-init"),
+    path("freelance/profile/", FreelanceMeProfileView.as_view(), name="freelance-profile-me"),
+
+    # public
+    path("freelancers/", FreelancePublicListView.as_view(), name="freelancers-public-list"),
+    path("freelancers/<int:pk>/", FreelancePublicDetailView.as_view(), name="freelancers-public-detail"),
+
+    path("freelance/documents/", FreelanceDocumentListCreateView.as_view(), name="freelance-documents"),
+    path("freelance/documents/<int:pk>/", FreelanceDocumentDetailView.as_view(), name="freelance-document-detail"),
+
+    # Agency profile
+    path("agency/profile/init/", AgencyProfileInitView.as_view(), name="agency-profile-init"),
+    path("agency/profile/", AgencyMeProfileView.as_view(), name="agency-profile-me"),
+
+    # Public agencies
+    path("agencies/", AgencyPublicListView.as_view(), name="agencies-public-list"),
+    path("agencies/<int:pk>/", AgencyPublicDetailView.as_view(), name="agencies-public-detail"),
+
+    # Agency documents
+    path("agency/documents/", AgencyDocumentListCreateView.as_view(), name="agency-documents"),
+    path("agency/documents/<int:pk>/", AgencyDocumentDetailView.as_view(), name="agency-document-detail"),
+
 ]
