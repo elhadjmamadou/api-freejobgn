@@ -11,3 +11,11 @@ class IsFreelance(BasePermission):
     def has_permission(self, request, view):
         user = request.user
         return bool(user and user.is_authenticated and getattr(user, "is_freelance", False))
+
+class IsAgency(BasePermission):
+    """Accès réservé aux utilisateurs PROVIDER/AGENCY."""
+    message = "Accès réservé aux prestataires AGENCY."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and getattr(user, "is_agency", False))

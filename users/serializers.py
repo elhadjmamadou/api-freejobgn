@@ -15,6 +15,10 @@ from rest_framework import serializers
 from .models import ProviderProfile, FreelanceDetails, Skill, Speciality
 from .models import FreelanceDocument, FreelanceDocumentType
 
+from .models import AgencyDetails, AgencyDocument
+
+
+
 
 User = get_user_model()
 
@@ -481,6 +485,180 @@ class FreelanceDocumentSerializer(serializers.ModelSerializer):
         On force provider_profile côté view (perform_create),
         donc ici on fait juste un full_clean safe.
         """
+        instance = super().create(validated_data)
+        try:
+            instance.full_clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message_dict)
+        return instance
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        try:
+            instance.full_clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message_dict)
+        return instance
+
+
+
+
+class AgencyDetailsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgencyDetails
+        fields = ("agency_name", "founded_at")
+
+
+class ProviderProfileAgencySerializer(serializers.ModelSerializer):
+    """
+    Profil agence:
+    - ProviderProfile (commun prestataire)
+    - AgencyDetails (détails agence)
+    """
+
+    # READ
+    username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+
+    skills = SkillMiniSerializer(many=True, read_only=True)
+    speciality = SpecialityMiniSerializer(read_only=True)
+    agency_details = AgencyDetailsSerializer(read_only=True)
+
+    # WRITE
+    skill_ids = serializers.PrimaryKeyRelatedField(
+        source="skills",
+        many=True,
+        queryset=Skill.objects.filter(is_active=True),
+        required=False,
+        write_only=True,
+    )
+    speciality_id = serializers.PrimaryKeyRelatedField(
+        source="speciality",
+        queryset=Speciality.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    agency = AgencyDetailsSerializer(write_only=True, required=False)
+
+    class Meta:
+        model = ProviderProfile
+        fields = (
+            "id",
+            "username",
+            "email",
+            "profile_picture",
+            "bio",
+            "hourly_rate",
+            "city_or_region",
+            "country",
+            "postal_code",
+            "phone",
+            "skills",
+            "skill_ids",
+            "speciality",
+            "speciality_id",
+            "agency_details",
+            "agency",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def validate(self, attrs):
+        # même règle que freelance
+        speciality = attrs.get("speciality")
+        skills = attrs.get("skills")
+        if speciality and skills:
+            spec_skill_ids = set(speciality.skills.values_list("id", flat=True))
+            user_skill_ids = {s.id for s in skills}
+            if spec_skill_ids and user_skill_ids and not (spec_skill_ids & user_skill_ids):
+                raise serializers.ValidationError(
+                    {"speciality_id": "Spécialité incompatible avec les skills fournis."}
+                )
+        return attrs
+
+    def _get_user(self):
+        user = self.context["request"].user
+        if not getattr(user, "is_agency", False):
+            raise serializers.ValidationError("Accès réservé aux prestataires AGENCY.")
+        return user
+
+    @transaction.atomic
+    def create(self, validated_data):
+        user = self._get_user()
+
+        if hasattr(user, "provider_profile"):
+            raise serializers.ValidationError("Profil prestataire existe déjà.")
+
+        agency_payload = validated_data.pop("agency", {})
+        skills = validated_data.pop("skills", [])
+
+        provider_profile = ProviderProfile.objects.create(user=user, **validated_data)
+
+        if skills:
+            provider_profile.skills.set(skills)
+
+        if not agency_payload or not agency_payload.get("agency_name"):
+            raise serializers.ValidationError(
+                {"agency": "Les infos agence sont requises (agency_name)."}
+            )
+
+        AgencyDetails.objects.create(provider_profile=provider_profile, **agency_payload)
+
+        provider_profile.full_clean()
+        return provider_profile
+
+    @transaction.atomic
+    def update(self, instance: ProviderProfile, validated_data):
+        user = self._get_user()
+        if instance.user_id != user.id:
+            raise serializers.ValidationError("Accès interdit.")
+
+        agency_payload = validated_data.pop("agency", None)
+        skills = validated_data.pop("skills", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if skills is not None:
+            instance.skills.set(skills)
+
+        if agency_payload is not None:
+            ad, _ = AgencyDetails.objects.get_or_create(provider_profile=instance)
+            for attr, value in agency_payload.items():
+                setattr(ad, attr, value)
+            ad.save()
+
+        instance.full_clean()
+        return instance
+
+
+class AgencyDocumentSerializer(serializers.ModelSerializer):
+    """
+    Document agence.
+    - file requis à la création
+    - file optionnel en update
+    """
+    class Meta:
+        model = AgencyDocument
+        fields = (
+            "id",
+            "doc_type",
+            "file",
+            "reference_number",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            self.fields["file"].required = False
+
+    def create(self, validated_data):
         instance = super().create(validated_data)
         try:
             instance.full_clean()

@@ -42,6 +42,13 @@ from .serializers import ProviderProfileFreelanceSerializer
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from .models import FreelanceDocument, FreelanceDocumentType
 from .serializers import FreelanceDocumentSerializer
+from rest_framework.exceptions import APIException
+
+from .permissions import IsAgency
+from .models import AgencyDocument
+from .serializers import ProviderProfileAgencySerializer, AgencyDocumentSerializer
+
+
 
 User = get_user_model()
 
@@ -878,6 +885,251 @@ class FreelanceDocumentDetailView(RetrieveUpdateDestroyAPIView):
 
     @extend_schema(
         summary="Supprimer un document (freelance)",
+        responses={204: OpenApiResponse(description="Deleted")},
+    )
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
+
+
+class AgencyProfileNotInitialized(APIException):
+    status_code = 409
+    default_detail = "Profil agence non initialisé. Faites d'abord /api/agency/profile/init/."
+    default_code = "agency_profile_not_initialized"
+
+
+@extend_schema(tags=["Agency Profile"])
+class AgencyProfileInitView(CreateAPIView):
+    """
+    Création initiale du profil agence (ProviderProfile + AgencyDetails).
+    """
+    permission_classes = [IsAgency]
+    serializer_class = ProviderProfileAgencySerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Initialiser mon profil agence",
+        description="Crée ProviderProfile + AgencyDetails pour l'utilisateur connecté (AGENCY).",
+        responses={
+            201: ProviderProfileAgencySerializer,
+            400: OpenApiResponse(description="Erreur de validation"),
+            409: OpenApiResponse(description="Profil déjà existant"),
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        if hasattr(request.user, "provider_profile"):
+            return Response({"detail": "Profil déjà existant."}, status=status.HTTP_409_CONFLICT)
+        return super().post(request, *args, **kwargs)
+
+
+@extend_schema(tags=["Agency Profile"])
+class AgencyMeProfileView(RetrieveUpdateAPIView):
+    """
+    Lire / modifier mon profil agence.
+    """
+    permission_classes = [IsAgency]
+    serializer_class = ProviderProfileAgencySerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_object(self):
+        return (
+            ProviderProfile.objects
+            .select_related("user", "speciality", "agency_details")
+            .prefetch_related("skills")
+            .get(user=self.request.user)
+        )
+
+    @extend_schema(
+        summary="Lire mon profil agence",
+        responses={200: ProviderProfileAgencySerializer, 404: OpenApiResponse(description="Profil non initialisé")},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Mettre à jour mon profil agence",
+        description="PATCH recommandé. Supporte profile_picture via multipart/form-data.",
+        responses={200: ProviderProfileAgencySerializer, 400: OpenApiResponse(description="Erreur de validation")},
+    )
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+
+
+# ---------------------------
+# Public agencies (clients)
+# ---------------------------
+
+@extend_schema(tags=["Agencies Public"])
+class AgencyPublicListView(ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ProviderProfileAgencySerializer
+
+    def get_queryset(self):
+        qs = (
+            ProviderProfile.objects
+            .select_related("user", "speciality", "agency_details")
+            .prefetch_related("skills")
+            .filter(
+                user__is_active=True,
+                user__role=UserRole.PROVIDER,
+                user__provider_kind=ProviderKind.AGENCY,
+            )
+            .distinct()
+            .order_by("-updated_at")
+        )
+
+        country = self.request.query_params.get("country")
+        city = self.request.query_params.get("city")
+        speciality_id = self.request.query_params.get("speciality_id")
+        skill_id = self.request.query_params.get("skill_id")
+
+        if country:
+            qs = qs.filter(country__iexact=country)
+        if city:
+            qs = qs.filter(city_or_region__icontains=city)
+        if speciality_id:
+            qs = qs.filter(speciality_id=speciality_id)
+        if skill_id:
+            qs = qs.filter(skills__id=skill_id)
+
+        return qs
+
+    @extend_schema(
+        summary="Lister les agences (public)",
+        parameters=[
+            OpenApiParameter(name="country", required=False, type=str),
+            OpenApiParameter(name="city", required=False, type=str),
+            OpenApiParameter(name="speciality_id", required=False, type=int),
+            OpenApiParameter(name="skill_id", required=False, type=int),
+        ],
+        responses={200: ProviderProfileAgencySerializer(many=True)},
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+@extend_schema(tags=["Agencies Public"])
+class AgencyPublicDetailView(RetrieveAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ProviderProfileAgencySerializer
+    lookup_field = "pk"
+
+    def get_queryset(self):
+        return (
+            ProviderProfile.objects
+            .select_related("user", "speciality", "agency_details")
+            .prefetch_related("skills")
+            .filter(
+                user__is_active=True,
+                user__role=UserRole.PROVIDER,
+                user__provider_kind=ProviderKind.AGENCY,
+            )
+        )
+
+
+# ---------------------------
+# Agency documents (private)
+# ---------------------------
+
+@extend_schema(tags=["Agency Documents"])
+class AgencyDocumentListCreateView(ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsAgency]
+    serializer_class = AgencyDocumentSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def _agency_details(self):
+        user = self.request.user
+        if not hasattr(user, "provider_profile") or not hasattr(user.provider_profile, "agency_details"):
+            raise AgencyProfileNotInitialized()
+        return user.provider_profile.agency_details
+
+    def get_queryset(self):
+        agency = self._agency_details()
+        return (
+            AgencyDocument.objects
+            .select_related("agency", "agency__provider_profile", "agency__provider_profile__user")
+            .filter(agency=agency)
+            .order_by("-created_at")
+        )
+
+    @extend_schema(
+        summary="Lister mes documents (agence)",
+        parameters=[
+            OpenApiParameter(name="doc_type", required=False, type=str),
+        ],
+        responses={
+            200: AgencyDocumentSerializer(many=True),
+            409: OpenApiResponse(description="Profil non initialisé"),
+        },
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        doc_type = request.query_params.get("doc_type")
+        if doc_type:
+            qs = qs.filter(doc_type=doc_type)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            ser = self.get_serializer(page, many=True)
+            return self.get_paginated_response(ser.data)
+
+        ser = self.get_serializer(qs, many=True)
+        return Response(ser.data)
+
+    @extend_schema(
+        summary="Uploader un document (agence)",
+        description="multipart/form-data. Champs requis: doc_type, file. Optionnel: reference_number.",
+        responses={
+            201: AgencyDocumentSerializer,
+            400: OpenApiResponse(description="Erreur de validation"),
+            409: OpenApiResponse(description="Profil non initialisé"),
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        serializer.save(agency=self._agency_details())
+
+
+@extend_schema(tags=["Agency Documents"])
+class AgencyDocumentDetailView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsAgency]
+    serializer_class = AgencyDocumentSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def _agency_details(self):
+        user = self.request.user
+        if not hasattr(user, "provider_profile") or not hasattr(user.provider_profile, "agency_details"):
+            raise AgencyProfileNotInitialized()
+        return user.provider_profile.agency_details
+
+    def get_queryset(self):
+        return AgencyDocument.objects.filter(agency=self._agency_details())
+
+    @extend_schema(
+        summary="Détail d’un document agence",
+        responses={
+            200: AgencyDocumentSerializer,
+            404: OpenApiResponse(description="Not found"),
+            409: OpenApiResponse(description="Profil non initialisé"),
+        },
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Mettre à jour un document agence",
+        description="PATCH recommandé. Tu peux remplacer le file ou juste reference_number.",
+        responses={200: AgencyDocumentSerializer, 400: OpenApiResponse(description="Erreur de validation")},
+    )
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Supprimer un document agence",
         responses={204: OpenApiResponse(description="Deleted")},
     )
     def delete(self, request, *args, **kwargs):

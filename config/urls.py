@@ -24,7 +24,7 @@ docs_permission_classes = [IsSuperUser]
 urlpatterns = [
     path("admin/", admin.site.urls),
     # API Auth endpoints
-    path("api/auth/", include("users.urls", namespace="users")),
+    path("api/users/", include("users.urls", namespace="users")),
     # OpenAPI schema (sécurisé - superuser only)
     path(
         "api/schema/",
@@ -46,7 +46,7 @@ urlpatterns = [
     ),
     # Redoc (sécurisé - superuser only)
     path(
-        "api/redoc/",
+        "redoc/",
         SpectacularRedocView.as_view(
             url_name="schema",
             authentication_classes=docs_auth_classes,

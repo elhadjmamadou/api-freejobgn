@@ -29,6 +29,9 @@ SECRET_KEY = config(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config("DEBUG", default=True, cast=bool)
 
+# Flag pour désactiver le throttling en tests
+TESTING = config("TESTING", default=False, cast=bool)
+
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
 
@@ -255,9 +258,13 @@ CORS_ALLOW_METHODS = [
 # Email Configuration
 # ============================================================
 
-EMAIL_BACKEND = config(
-    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
-)
+# En mode TESTING, on utilise le backend locmem pour capturer les emails
+if TESTING:
+    EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+else:
+    EMAIL_BACKEND = config(
+        "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+    )
 EMAIL_HOST = config("EMAIL_HOST", default="localhost")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
