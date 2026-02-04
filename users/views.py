@@ -768,28 +768,6 @@ class FreelancePublicDetailView(RetrieveAPIView):
         return super().get(request, *args, **kwargs)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @extend_schema(tags=["Freelance Documents"])
 class FreelanceDocumentListCreateView(ListCreateAPIView):
     """
