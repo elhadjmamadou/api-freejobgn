@@ -15,6 +15,9 @@ from .views import (
     RegistrationOptionsView,
     PublicStatsView,
     ClientProfileMeView,
+    ClientProfileMeView,
+    ClientCompanyDocumentListCreateView,
+    ClientCompanyDocumentDetailView,
 )
 
 app_name = "users"
@@ -37,4 +40,18 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
     # Utilisateur courant
     path("me/", MeView.as_view(), name="me"),
+    
+    # API Client Profile endpoint
+    path("client/profile/", ClientProfileMeView.as_view(), name="client-profile"),
+    # API Client Company Documents endpoints
+    path(
+        "client/company/documents/",
+        ClientCompanyDocumentListCreateView.as_view(),
+        name="client-company-documents-list",
+    ),
+    path(
+        "client/company/documents/<int:pk>/",
+        ClientCompanyDocumentDetailView.as_view(),
+        name="client-company-documents-detail",
+    ),
 ]
