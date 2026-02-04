@@ -17,6 +17,7 @@ from rest_framework_simplejwt.views import (
 
 from config.permissions import IsSuperUser
 
+
 # Configuration commune pour les vues de documentation (superuser only)
 docs_auth_classes = [BasicAuthentication, SessionAuthentication]
 docs_permission_classes = [IsSuperUser]
@@ -25,6 +26,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # API Auth endpoints
     path("api/users/", include("users.urls", namespace="users")),
+    
     # OpenAPI schema (sécurisé - superuser only)
     path(
         "api/schema/",
@@ -54,10 +56,9 @@ urlpatterns = [
         ),
         name="redoc",
     ),
-
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
 ]
 
 # Servir les fichiers media en développement

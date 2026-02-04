@@ -279,6 +279,346 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: ''
+  /api/client/profile/:
+    get:
+      operationId: client_profile_retrieve
+      description: Retourne le profil client de l'utilisateur connecté. Si le profil
+        n'existe pas encore, retourne client_profile=null.
+      summary: Lire le profil client
+      tags:
+      - Client Profile
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileRead'
+              examples:
+                ProfilParticulierExistant:
+                  value:
+                    user:
+                      id: 1
+                      email: client@example.com
+                      username: johndoe
+                      role: CLIENT
+                    client_profile:
+                      id: 1
+                      client_type: INDIVIDUAL
+                      city_or_region: Conakry
+                      country: Guinée
+                      postal_code: ''
+                      phone: +224 123 456 789
+                      profile_picture: null
+                      details:
+                        first_name: John
+                        last_name: Doe
+                      created_at: '2026-02-01T10:00:00+00:00'
+                      updated_at: '2026-02-01T10:00:00+00:00'
+                  summary: Profil particulier existant
+                ProfilNonCréé:
+                  value:
+                    user:
+                      id: 1
+                      email: client@example.com
+                      username: johndoe
+                      role: CLIENT
+                    client_profile: null
+                  summary: Profil non créé
+          description: Profil client récupéré avec succès.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+          description: Non authentifié.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+          description: Rôle incorrect (pas CLIENT).
+    post:
+      operationId: client_profile_create
+      description: Crée le profil client de l'utilisateur connecté. Le client_type
+        (INDIVIDUAL ou COMPANY) est immutable après création. Les champs requis dépendent
+        du type choisi.
+      summary: Créer le profil client
+      tags:
+      - Client Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientProfileCreateRequest'
+            examples:
+              CréationParticulier:
+                value:
+                  client_type: INDIVIDUAL
+                  city_or_region: Conakry
+                  country: Guinée
+                  first_name: John
+                  last_name: Doe
+                summary: Création particulier
+              CréationEntreprise:
+                value:
+                  client_type: COMPANY
+                  city_or_region: Conakry
+                  country: Guinée
+                  postal_code: BP 100
+                  phone: +224 999 888 777
+                  company_name: Ma Super Entreprise
+                summary: Création entreprise
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClientProfileCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClientProfileCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileRead'
+              examples:
+                CréationParticulier:
+                  value:
+                    user:
+                      id: 1
+                      email: client@example.com
+                      username: johndoe
+                      role: CLIENT
+                    client_profile:
+                      id: 1
+                      client_type: INDIVIDUAL
+                      city_or_region: Conakry
+                      country: Guinée
+                      postal_code: ''
+                      phone: ''
+                      profile_picture: null
+                      details:
+                        first_name: John
+                        last_name: Doe
+                      created_at: '2026-02-01T10:00:00+00:00'
+                      updated_at: '2026-02-01T10:00:00+00:00'
+                  summary: Création particulier
+                CréationEntreprise:
+                  value:
+                    user:
+                      id: 1
+                      email: company@example.com
+                      username: mycompany
+                      role: CLIENT
+                    client_profile:
+                      id: 2
+                      client_type: COMPANY
+                      city_or_region: Conakry
+                      country: Guinée
+                      postal_code: BP 100
+                      phone: +224 999 888 777
+                      profile_picture: null
+                      details:
+                        company_name: Ma Super Entreprise
+                      created_at: '2026-02-01T10:00:00+00:00'
+                      updated_at: '2026-02-01T10:00:00+00:00'
+                  summary: Création entreprise
+          description: Profil client créé avec succès.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Erreur de validation.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+          description: Non authentifié.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+          description: Rôle incorrect (pas CLIENT).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+              examples:
+                ProfilExisteDéjà:
+                  value:
+                    code: profile_exists
+                    detail: Un profil client existe déjà pour cet utilisateur.
+                  summary: Profil existe déjà
+          description: Profil déjà existant.
+    patch:
+      operationId: client_profile_partial_update
+      description: Met à jour partiellement le profil client existant. Le client_type
+        ne peut PAS être modifié.
+      summary: Mettre à jour le profil client
+      tags:
+      - Client Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClientProfileUpdateRequest'
+            examples:
+              MiseÀJourParticulier:
+                value:
+                  city_or_region: Kindia
+                  first_name: Johnny
+                summary: Mise à jour particulier
+              MiseÀJourEntreprise:
+                value:
+                  phone: +224 111 222 333
+                  company_name: Nouvelle Raison Sociale
+                summary: Mise à jour entreprise
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClientProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClientProfileUpdateRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileRead'
+          description: Profil client mis à jour avec succès.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+              examples:
+                ClientTypeImmutable:
+                  value:
+                    client_type:
+                      code: client_type_immutable
+                      detail: Le type de client ne peut pas être modifié après création.
+                  summary: client_type immutable
+          description: 'Erreur de validation (ex: tentative de modifier client_type).'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+          description: Non authentifié.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+          description: Rôle incorrect (pas CLIENT).
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfileError'
+              examples:
+                ProfilNonExistant:
+                  value:
+                    code: profile_not_created
+                    detail: Aucun profil client n'existe. Utilisez POST pour créer.
+                  summary: Profil non existant
+          description: Profil non créé.
+  /api/token/:
+    post:
+      operationId: token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/token/refresh/:
+    post:
+      operationId: token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/token/verify/:
+    post:
+      operationId: token_verify_create
+      description: |-
+        Takes a token and indicates if it is valid.  This view provides no
+        information about a token's fitness for a particular use.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenVerifyRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
 components:
   schemas:
     ActivationRequest:
@@ -320,6 +660,125 @@ components:
       required:
       - label
       - value
+    ClientProfileCreateRequest:
+      type: object
+      description: |-
+        Serializer pour la création du profil client.
+        Crée ClientProfile + Details selon client_type.
+      properties:
+        client_type:
+          allOf:
+          - $ref: '#/components/schemas/ClientTypeEnum'
+          description: |-
+            Type de client: INDIVIDUAL ou COMPANY
+
+            * `INDIVIDUAL` - Particulier
+            * `COMPANY` - Entreprise
+        city_or_region:
+          type: string
+          minLength: 1
+          description: Ville ou région
+          maxLength: 120
+        country:
+          type: string
+          minLength: 1
+          description: Pays
+          maxLength: 120
+        postal_code:
+          type: string
+          default: ''
+          description: Code postal (optionnel)
+          maxLength: 20
+        phone:
+          type: string
+          default: ''
+          description: Téléphone (optionnel)
+          maxLength: 30
+        first_name:
+          type: string
+          minLength: 1
+          description: Prénom (requis si client_type=INDIVIDUAL)
+          maxLength: 80
+        last_name:
+          type: string
+          minLength: 1
+          description: Nom (requis si client_type=INDIVIDUAL)
+          maxLength: 80
+        company_name:
+          type: string
+          minLength: 1
+          description: Nom de l'entreprise (requis si client_type=COMPANY)
+          maxLength: 150
+      required:
+      - city_or_region
+      - client_type
+      - country
+    ClientProfileError:
+      type: object
+      description: Serializer pour les erreurs avec code.
+      properties:
+        code:
+          type: string
+          description: Code d'erreur machine-readable
+        detail:
+          type: string
+          description: Message d'erreur human-readable
+      required:
+      - code
+      - detail
+    ClientProfileRead:
+      type: object
+      description: |-
+        Serializer de lecture pour le profil client complet.
+        Structure stable pour le frontend.
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/ClientUser'
+          readOnly: true
+        client_profile:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+      required:
+      - client_profile
+      - user
+    ClientTypeEnum:
+      enum:
+      - INDIVIDUAL
+      - COMPANY
+      type: string
+      description: |-
+        * `INDIVIDUAL` - Particulier
+        * `COMPANY` - Entreprise
+    ClientUser:
+      type: object
+      description: Informations basiques de l'utilisateur pour le profil client.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Adresse e-mail
+        username:
+          type: string
+          readOnly: true
+          title: Nom d’utilisateur
+          description: Requis. 150 caractères maximum. Uniquement des lettres, nombres
+            et les caractères « @ », « . », « + », « - » et « _ ».
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+      required:
+      - email
+      - id
+      - role
+      - username
     ErrorResponse:
       type: object
       description: Serializer générique pour les erreurs.
@@ -370,6 +829,49 @@ components:
     NullEnum:
       enum:
       - null
+    PatchedClientProfileUpdateRequest:
+      type: object
+      description: |-
+        Serializer pour la mise à jour partielle du profil client.
+        client_type est immutable.
+      properties:
+        city_or_region:
+          type: string
+          minLength: 1
+          description: Ville ou région
+          maxLength: 120
+        country:
+          type: string
+          minLength: 1
+          description: Pays
+          maxLength: 120
+        postal_code:
+          type: string
+          description: Code postal
+          maxLength: 20
+        phone:
+          type: string
+          description: Téléphone
+          maxLength: 30
+        first_name:
+          type: string
+          minLength: 1
+          description: Prénom (pour les particuliers)
+          maxLength: 80
+        last_name:
+          type: string
+          minLength: 1
+          description: Nom (pour les particuliers)
+          maxLength: 80
+        company_name:
+          type: string
+          minLength: 1
+          description: Nom de l'entreprise (pour les entreprises)
+          maxLength: 150
+        client_type:
+          type: string
+          writeOnly: true
+          minLength: 1
     ProviderKindEnum:
       enum:
       - FREELANCE
@@ -527,6 +1029,51 @@ components:
       description: |-
         * `CLIENT` - Client
         * `PROVIDER` - Prestataire
+    TokenObtainPair:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenObtainPairRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
     TokenRefreshResponse:
       type: object
       description: Serializer pour la réponse de refresh token.
@@ -536,6 +1083,15 @@ components:
           description: Nouveau JWT Access Token
       required:
       - access
+    TokenVerifyRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - token
     UserMe:
       type: object
       description: Serializer pour les informations de l'utilisateur connecté.
@@ -589,6 +1145,11 @@ components:
       - role
       - username
   securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenu via POST /api/auth/login/
     jwtAuth:
       type: http
       scheme: bearer
