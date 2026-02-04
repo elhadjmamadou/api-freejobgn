@@ -14,6 +14,7 @@ from .views import (
     MeView,
     RegistrationOptionsView,
     PublicStatsView,
+    ClientProfileMeView,
 )
 
 app_name = "users"

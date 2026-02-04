@@ -16,6 +16,11 @@ from rest_framework_simplejwt.views import (
 )
 
 from config.permissions import IsSuperUser
+from users.views import (
+    ClientProfileMeView,
+    ClientCompanyDocumentListCreateView,
+    ClientCompanyDocumentDetailView,
+)
 
 # Configuration commune pour les vues de documentation (superuser only)
 docs_auth_classes = [BasicAuthentication, SessionAuthentication]
@@ -25,6 +30,19 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # API Auth endpoints
     path("api/auth/", include("users.urls", namespace="users")),
+    # API Client Profile endpoint
+    path("api/client/profile/", ClientProfileMeView.as_view(), name="client-profile"),
+    # API Client Company Documents endpoints
+    path(
+        "api/client/company/documents/",
+        ClientCompanyDocumentListCreateView.as_view(),
+        name="client-company-documents-list",
+    ),
+    path(
+        "api/client/company/documents/<int:pk>/",
+        ClientCompanyDocumentDetailView.as_view(),
+        name="client-company-documents-detail",
+    ),
     # OpenAPI schema (sécurisé - superuser only)
     path(
         "api/schema/",
@@ -54,10 +72,9 @@ urlpatterns = [
         ),
         name="redoc",
     ),
-
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
 ]
 
 # Servir les fichiers media en développement

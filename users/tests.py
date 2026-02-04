@@ -9,7 +9,16 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
 from .tokens import activation_token_generator, encode_uid, decode_uid
-from .models import UserRole, ProviderKind
+from .models import (
+    UserRole,
+    ProviderKind,
+    ClientType,
+    ClientProfile,
+    ClientIndividualDetails,
+    ClientCompanyDetails,
+    ClientCompanyDocument,
+)
+from rest_framework_simplejwt.tokens import RefreshToken
 
 User = get_user_model()
 
@@ -613,3 +622,788 @@ class PublicStatsViewTests(APITestCase):
         client = APIClient()
         response = client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+# ============================================================
+# Tests pour le profil Client
+# ============================================================
+
+
+@override_settings(TESTING=True)
+class ClientProfileViewTests(APITestCase):
+    """Tests pour GET/POST/PATCH /api/client/profile/"""
+
+    def setUp(self):
+        self.url = "/api/client/profile/"
+
+        # Client user (sans profil)
+        self.client_user = User.objects.create_user(
+            username="clientuser",
+            email="client@example.com",
+            password="TestPass123!",
+            role=UserRole.CLIENT,
+            is_active=True,
+        )
+
+        # Provider user (ne doit pas accéder)
+        self.provider_user = User.objects.create_user(
+            username="provideruser",
+            email="provider@example.com",
+            password="TestPass123!",
+            role=UserRole.PROVIDER,
+            provider_kind=ProviderKind.FREELANCE,
+            is_active=True,
+        )
+
+    def _auth_as(self, user):
+        """Authentifie le client de test."""
+        self.client.force_authenticate(user=user)
+
+    # -------------------- GET Tests --------------------
+
+    def test_get_without_auth_returns_401(self):
+        """GET sans authentification retourne 401."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_get_provider_user_returns_403(self):
+        """GET avec un PROVIDER retourne 403."""
+        self._auth_as(self.provider_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["code"], "wrong_role")
+
+    def test_get_client_without_profile_returns_200_with_null(self):
+        """GET client sans profil retourne 200 avec client_profile=null."""
+        self._auth_as(self.client_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIn("user", data)
+        self.assertIn("client_profile", data)
+        self.assertIsNone(data["client_profile"])
+        self.assertEqual(data["user"]["id"], self.client_user.id)
+
+    def test_get_client_with_individual_profile(self):
+        """GET client avec profil INDIVIDUAL retourne les détails."""
+        self._auth_as(self.client_user)
+
+        # Créer profil + détails
+        profile = ClientProfile.objects.create(
+            user=self.client_user,
+            client_type=ClientType.INDIVIDUAL,
+            city_or_region="Conakry",
+            country="Guinée",
+        )
+        ClientIndividualDetails.objects.create(
+            client_profile=profile,
+            first_name="John",
+            last_name="Doe",
+        )
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIsNotNone(data["client_profile"])
+        self.assertEqual(data["client_profile"]["client_type"], "INDIVIDUAL")
+        self.assertEqual(data["client_profile"]["details"]["first_name"], "John")
+        self.assertEqual(data["client_profile"]["details"]["last_name"], "Doe")
+
+    def test_get_client_with_company_profile(self):
+        """GET client avec profil COMPANY retourne les détails."""
+        self._auth_as(self.client_user)
+
+        profile = ClientProfile.objects.create(
+            user=self.client_user,
+            client_type=ClientType.COMPANY,
+            city_or_region="Conakry",
+            country="Guinée",
+        )
+        ClientCompanyDetails.objects.create(
+            client_profile=profile,
+            company_name="Ma Super Entreprise",
+        )
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["client_profile"]["client_type"], "COMPANY")
+        self.assertEqual(
+            data["client_profile"]["details"]["company_name"], "Ma Super Entreprise"
+        )
+
+    # -------------------- POST Tests --------------------
+
+    def test_post_without_auth_returns_401(self):
+        """POST sans authentification retourne 401."""
+        response = self.client.post(self.url, {})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_post_provider_user_returns_403(self):
+        """POST avec un PROVIDER retourne 403."""
+        self._auth_as(self.provider_user)
+        response = self.client.post(self.url, {})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_post_create_individual_success(self):
+        """POST création profil INDIVIDUAL réussie."""
+        self._auth_as(self.client_user)
+
+        data = {
+            "client_type": "INDIVIDUAL",
+            "city_or_region": "Conakry",
+            "country": "Guinée",
+            "first_name": "Jean",
+            "last_name": "Dupont",
+        }
+
+        response = self.client.post(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        result = response.json()
+        self.assertIsNotNone(result["client_profile"])
+        self.assertEqual(result["client_profile"]["client_type"], "INDIVIDUAL")
+        self.assertEqual(result["client_profile"]["details"]["first_name"], "Jean")
+        self.assertEqual(result["client_profile"]["details"]["last_name"], "Dupont")
+
+        # Vérifier en base
+        self.assertTrue(ClientProfile.objects.filter(user=self.client_user).exists())
+        self.assertTrue(
+            ClientIndividualDetails.objects.filter(
+                client_profile__user=self.client_user
+            ).exists()
+        )
+
+    def test_post_create_company_success(self):
+        """POST création profil COMPANY réussie."""
+        self._auth_as(self.client_user)
+
+        data = {
+            "client_type": "COMPANY",
+            "city_or_region": "Kindia",
+            "country": "Guinée",
+            "postal_code": "BP 100",
+            "phone": "+224 123 456 789",
+            "company_name": "Entreprise SARL",
+        }
+
+        response = self.client.post(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        result = response.json()
+        self.assertEqual(result["client_profile"]["client_type"], "COMPANY")
+        self.assertEqual(
+            result["client_profile"]["details"]["company_name"], "Entreprise SARL"
+        )
+        self.assertEqual(result["client_profile"]["postal_code"], "BP 100")
+
+    def test_post_individual_missing_first_name_returns_400(self):
+        """POST INDIVIDUAL sans first_name retourne 400."""
+        self._auth_as(self.client_user)
+
+        data = {
+            "client_type": "INDIVIDUAL",
+            "city_or_region": "Conakry",
+            "country": "Guinée",
+            "last_name": "Dupont",
+        }
+
+        response = self.client.post(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("first_name", response.json())
+
+    def test_post_company_missing_company_name_returns_400(self):
+        """POST COMPANY sans company_name retourne 400."""
+        self._auth_as(self.client_user)
+
+        data = {
+            "client_type": "COMPANY",
+            "city_or_region": "Conakry",
+            "country": "Guinée",
+        }
+
+        response = self.client.post(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("company_name", response.json())
+
+    def test_post_second_time_returns_409(self):
+        """POST une seconde fois retourne 409 Conflict."""
+        self._auth_as(self.client_user)
+
+        # Première création
+        ClientProfile.objects.create(
+            user=self.client_user,
+            client_type=ClientType.INDIVIDUAL,
+            city_or_region="Conakry",
+            country="Guinée",
+        )
+
+        # Deuxième tentative
+        data = {
+            "client_type": "COMPANY",
+            "city_or_region": "Kindia",
+            "country": "Guinée",
+            "company_name": "Test",
+        }
+
+        response = self.client.post(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "profile_exists")
+
+    # -------------------- PATCH Tests --------------------
+
+    def test_patch_without_auth_returns_401(self):
+        """PATCH sans authentification retourne 401."""
+        response = self.client.patch(self.url, {})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_patch_provider_user_returns_403(self):
+        """PATCH avec un PROVIDER retourne 403."""
+        self._auth_as(self.provider_user)
+        response = self.client.patch(self.url, {})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_patch_without_profile_returns_409(self):
+        """PATCH sans profil existant retourne 409."""
+        self._auth_as(self.client_user)
+
+        response = self.client.patch(
+            self.url, {"city_or_region": "Kindia"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "profile_not_created")
+
+    def test_patch_update_individual_success(self):
+        """PATCH mise à jour profil INDIVIDUAL réussie."""
+        self._auth_as(self.client_user)
+
+        # Créer profil
+        profile = ClientProfile.objects.create(
+            user=self.client_user,
+            client_type=ClientType.INDIVIDUAL,
+            city_or_region="Conakry",
+            country="Guinée",
+        )
+        ClientIndividualDetails.objects.create(
+            client_profile=profile,
+            first_name="John",
+            last_name="Doe",
+        )
+
+        # Mettre à jour
+        data = {
+            "city_or_region": "Kindia",
+            "first_name": "Johnny",
+        }
+
+        response = self.client.patch(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        result = response.json()
+        self.assertEqual(result["client_profile"]["city_or_region"], "Kindia")
+        self.assertEqual(result["client_profile"]["details"]["first_name"], "Johnny")
+        self.assertEqual(
+            result["client_profile"]["details"]["last_name"], "Doe"
+        )  # inchangé
+
+    def test_patch_update_company_success(self):
+        """PATCH mise à jour profil COMPANY réussie."""
+        self._auth_as(self.client_user)
+
+        profile = ClientProfile.objects.create(
+            user=self.client_user,
+            client_type=ClientType.COMPANY,
+            city_or_region="Conakry",
+            country="Guinée",
+        )
+        ClientCompanyDetails.objects.create(
+            client_profile=profile,
+            company_name="Ancienne SARL",
+        )
+
+        data = {
+            "phone": "+224 999 888 777",
+            "company_name": "Nouvelle SARL",
+        }
+
+        response = self.client.patch(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        result = response.json()
+        self.assertEqual(result["client_profile"]["phone"], "+224 999 888 777")
+        self.assertEqual(
+            result["client_profile"]["details"]["company_name"], "Nouvelle SARL"
+        )
+
+    def test_patch_attempt_change_client_type_returns_400(self):
+        """PATCH tentative de modifier client_type retourne 400."""
+        self._auth_as(self.client_user)
+
+        profile = ClientProfile.objects.create(
+            user=self.client_user,
+            client_type=ClientType.INDIVIDUAL,
+            city_or_region="Conakry",
+            country="Guinée",
+        )
+        ClientIndividualDetails.objects.create(
+            client_profile=profile,
+            first_name="John",
+            last_name="Doe",
+        )
+
+        data = {
+            "client_type": "COMPANY",
+        }
+
+        response = self.client.patch(self.url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("client_type", response.json())
+
+
+# ============================================================
+# Tests Client Company Documents (CRUD)
+# ============================================================
+
+
+class ClientCompanyDocumentTests(APITestCase):
+    """
+    Tests des endpoints de gestion des documents entreprise.
+
+    Endpoints testés:
+    - GET /api/client/company/documents/
+    - POST /api/client/company/documents/
+    - GET /api/client/company/documents/{id}/
+    - PATCH /api/client/company/documents/{id}/
+    - DELETE /api/client/company/documents/{id}/
+    """
+
+    def setUp(self):
+        """Configuration des tests."""
+        self.list_url = reverse("client-company-documents-list")
+
+        # User CLIENT avec profil COMPANY (setup complet)
+        self.company_user = User.objects.create_user(
+            username="company",
+            email="company@example.com",
+            password="Password123!",
+            role=UserRole.CLIENT,
+            is_active=True,
+        )
+        self.company_profile = ClientProfile.objects.create(
+            user=self.company_user,
+            client_type=ClientType.COMPANY,
+            city_or_region="Conakry",
+            country="Guinée",
+        )
+        self.company_details = ClientCompanyDetails.objects.create(
+            client_profile=self.company_profile,
+            company_name="Ma SARL",
+        )
+
+        # User CLIENT avec profil INDIVIDUAL (pas d'accès aux documents)
+        self.individual_user = User.objects.create_user(
+            username="individual",
+            email="individual@example.com",
+            password="Password123!",
+            role=UserRole.CLIENT,
+            is_active=True,
+        )
+        self.individual_profile = ClientProfile.objects.create(
+            user=self.individual_user,
+            client_type=ClientType.INDIVIDUAL,
+            city_or_region="Kindia",
+            country="Guinée",
+        )
+        ClientIndividualDetails.objects.create(
+            client_profile=self.individual_profile,
+            first_name="John",
+            last_name="Doe",
+        )
+
+        # User PROVIDER
+        self.provider_user = User.objects.create_user(
+            username="provider",
+            email="provider@example.com",
+            password="Password123!",
+            role=UserRole.PROVIDER,
+            provider_kind=ProviderKind.FREELANCE,
+            is_active=True,
+        )
+
+        # User CLIENT sans profil
+        self.no_profile_user = User.objects.create_user(
+            username="noprofile",
+            email="noprofile@example.com",
+            password="Password123!",
+            role=UserRole.CLIENT,
+            is_active=True,
+        )
+
+        # Autre user COMPANY (pour tester l'isolation)
+        self.other_company_user = User.objects.create_user(
+            username="othercompany",
+            email="other@example.com",
+            password="Password123!",
+            role=UserRole.CLIENT,
+            is_active=True,
+        )
+        other_profile = ClientProfile.objects.create(
+            user=self.other_company_user,
+            client_type=ClientType.COMPANY,
+            city_or_region="Labé",
+            country="Guinée",
+        )
+        self.other_company_details = ClientCompanyDetails.objects.create(
+            client_profile=other_profile,
+            company_name="Autre SARL",
+        )
+
+    def _auth_as(self, user):
+        """Authentifie le client de test comme le user donné."""
+        refresh = RefreshToken.for_user(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+
+    def _create_test_file(self, name="test.pdf", content=b"dummy content"):
+        """Crée un fichier temporaire pour les tests d'upload."""
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(
+            name=name,
+            content=content,
+            content_type="application/pdf",
+        )
+
+    def detail_url(self, pk):
+        """Retourne l'URL de détail d'un document."""
+        return reverse("client-company-documents-detail", kwargs={"pk": pk})
+
+    # ---------- Tests GET list ----------
+
+    def test_list_requires_authentication(self):
+        """GET /documents/ sans auth retourne 401."""
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_list_provider_forbidden(self):
+        """GET /documents/ avec PROVIDER retourne 403."""
+        self._auth_as(self.provider_user)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["code"], "wrong_role")
+
+    def test_list_individual_forbidden(self):
+        """GET /documents/ avec CLIENT INDIVIDUAL retourne 403."""
+        self._auth_as(self.individual_user)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json()["code"], "company_profile_required")
+
+    def test_list_no_profile_returns_409(self):
+        """GET /documents/ sans profil retourne 409."""
+        self._auth_as(self.no_profile_user)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.json()["code"], "profile_not_created")
+
+    def test_list_empty_success(self):
+        """GET /documents/ retourne liste vide si pas de documents."""
+        self._auth_as(self.company_user)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # DRF pagination activée
+        data = response.json()
+        self.assertEqual(data.get("count", len(data)), 0)
+        results = data.get("results", data)
+        self.assertEqual(results, [])
+
+    def test_list_with_documents_success(self):
+        """GET /documents/ retourne les documents de l'entreprise."""
+        self._auth_as(self.company_user)
+
+        # Créer 2 documents
+        ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="RCCM",
+            file="test1.pdf",
+            reference_number="REF-001",
+        )
+        ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="LEGAL",
+            file="test2.pdf",
+        )
+
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        data = response.json()
+        # Gestion pagination
+        results = data.get("results", data)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["doc_type"], "LEGAL")  # Plus récent en premier
+        self.assertEqual(results[1]["doc_type"], "RCCM")
+
+    def test_list_isolation_between_companies(self):
+        """Un user ne voit pas les documents d'une autre entreprise."""
+        # Créer document pour other_company
+        ClientCompanyDocument.objects.create(
+            company=self.other_company_details,
+            doc_type="RCCM",
+            file="other.pdf",
+        )
+
+        self._auth_as(self.company_user)
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Gestion pagination
+        data = response.json()
+        results = data.get("results", data)
+        self.assertEqual(results, [])  # Ne voit pas le document de l'autre
+
+    # ---------- Tests POST create ----------
+
+    def test_create_document_success(self):
+        """POST /documents/ crée un document avec succès."""
+        self._auth_as(self.company_user)
+
+        data = {
+            "doc_type": "RCCM",
+            "file": self._create_test_file("rccm.pdf"),
+            "reference_number": "GN-2026-001",
+        }
+
+        response = self.client.post(self.list_url, data, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        result = response.json()
+        self.assertEqual(result["doc_type"], "RCCM")
+        self.assertEqual(result["reference_number"], "GN-2026-001")
+        self.assertIn("file_url", result)
+        self.assertIn("id", result)
+
+        # Vérifier en base
+        self.assertEqual(ClientCompanyDocument.objects.count(), 1)
+        doc = ClientCompanyDocument.objects.first()
+        self.assertEqual(doc.company, self.company_details)
+
+    def test_create_document_without_reference(self):
+        """POST /documents/ sans reference_number réussit."""
+        self._auth_as(self.company_user)
+
+        data = {
+            "doc_type": "OTHER",
+            "file": self._create_test_file("doc.pdf"),
+        }
+
+        response = self.client.post(self.list_url, data, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["reference_number"], "")
+
+    def test_create_document_missing_file_returns_400(self):
+        """POST /documents/ sans fichier retourne 400."""
+        self._auth_as(self.company_user)
+
+        data = {"doc_type": "RCCM"}
+
+        response = self.client.post(self.list_url, data, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("file", response.json())
+
+    def test_create_document_invalid_doc_type_returns_400(self):
+        """POST /documents/ avec doc_type invalide retourne 400."""
+        self._auth_as(self.company_user)
+
+        data = {
+            "doc_type": "INVALID",
+            "file": self._create_test_file(),
+        }
+
+        response = self.client.post(self.list_url, data, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("doc_type", response.json())
+
+    def test_create_provider_forbidden(self):
+        """POST /documents/ avec PROVIDER retourne 403."""
+        self._auth_as(self.provider_user)
+
+        data = {
+            "doc_type": "RCCM",
+            "file": self._create_test_file(),
+        }
+
+        response = self.client.post(self.list_url, data, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_individual_forbidden(self):
+        """POST /documents/ avec CLIENT INDIVIDUAL retourne 403."""
+        self._auth_as(self.individual_user)
+
+        data = {
+            "doc_type": "RCCM",
+            "file": self._create_test_file(),
+        }
+
+        response = self.client.post(self.list_url, data, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # ---------- Tests GET detail ----------
+
+    def test_detail_success(self):
+        """GET /documents/{id}/ retourne les détails du document."""
+        self._auth_as(self.company_user)
+
+        doc = ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="RCCM",
+            file="test.pdf",
+            reference_number="REF-001",
+        )
+
+        response = self.client.get(self.detail_url(doc.pk))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["id"], doc.pk)
+        self.assertEqual(response.json()["doc_type"], "RCCM")
+
+    def test_detail_other_company_returns_404(self):
+        """GET /documents/{id}/ pour un document d'une autre entreprise retourne 404."""
+        self._auth_as(self.company_user)
+
+        # Document de l'autre entreprise
+        other_doc = ClientCompanyDocument.objects.create(
+            company=self.other_company_details,
+            doc_type="RCCM",
+            file="other.pdf",
+        )
+
+        response = self.client.get(self.detail_url(other_doc.pk))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_detail_nonexistent_returns_404(self):
+        """GET /documents/{id}/ pour un ID inexistant retourne 404."""
+        self._auth_as(self.company_user)
+        response = self.client.get(self.detail_url(99999))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ---------- Tests PATCH update ----------
+
+    def test_patch_document_success(self):
+        """PATCH /documents/{id}/ met à jour le document."""
+        self._auth_as(self.company_user)
+
+        doc = ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="OTHER",
+            file="test.pdf",
+            reference_number="OLD-REF",
+        )
+
+        data = {
+            "doc_type": "LEGAL",
+            "reference_number": "NEW-REF",
+        }
+
+        response = self.client.patch(self.detail_url(doc.pk), data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        result = response.json()
+        self.assertEqual(result["doc_type"], "LEGAL")
+        self.assertEqual(result["reference_number"], "NEW-REF")
+
+        # Vérifier en base
+        doc.refresh_from_db()
+        self.assertEqual(doc.doc_type, "LEGAL")
+        self.assertEqual(doc.reference_number, "NEW-REF")
+
+    def test_patch_partial_update(self):
+        """PATCH /documents/{id}/ avec un seul champ."""
+        self._auth_as(self.company_user)
+
+        doc = ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="RCCM",
+            file="test.pdf",
+            reference_number="REF-001",
+        )
+
+        data = {"reference_number": "UPDATED-REF"}
+
+        response = self.client.patch(self.detail_url(doc.pk), data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        doc.refresh_from_db()
+        self.assertEqual(doc.doc_type, "RCCM")  # Inchangé
+        self.assertEqual(doc.reference_number, "UPDATED-REF")  # Modifié
+
+    def test_patch_other_company_returns_404(self):
+        """PATCH /documents/{id}/ pour un document d'une autre entreprise retourne 404."""
+        self._auth_as(self.company_user)
+
+        other_doc = ClientCompanyDocument.objects.create(
+            company=self.other_company_details,
+            doc_type="RCCM",
+            file="other.pdf",
+        )
+
+        data = {"doc_type": "LEGAL"}
+
+        response = self.client.patch(self.detail_url(other_doc.pk), data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ---------- Tests DELETE ----------
+
+    def test_delete_document_success(self):
+        """DELETE /documents/{id}/ supprime le document."""
+        self._auth_as(self.company_user)
+
+        doc = ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="RCCM",
+            file="test.pdf",
+        )
+
+        response = self.client.delete(self.detail_url(doc.pk))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Vérifier suppression
+        self.assertEqual(ClientCompanyDocument.objects.count(), 0)
+
+    def test_delete_other_company_returns_404(self):
+        """DELETE /documents/{id}/ pour un document d'une autre entreprise retourne 404."""
+        self._auth_as(self.company_user)
+
+        other_doc = ClientCompanyDocument.objects.create(
+            company=self.other_company_details,
+            doc_type="RCCM",
+            file="other.pdf",
+        )
+
+        response = self.client.delete(self.detail_url(other_doc.pk))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        # Document toujours là
+        self.assertTrue(ClientCompanyDocument.objects.filter(pk=other_doc.pk).exists())
+
+    def test_delete_provider_forbidden(self):
+        """DELETE /documents/{id}/ avec PROVIDER retourne 403."""
+        doc = ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="RCCM",
+            file="test.pdf",
+        )
+
+        self._auth_as(self.provider_user)
+        response = self.client.delete(self.detail_url(doc.pk))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_delete_individual_forbidden(self):
+        """DELETE /documents/{id}/ avec CLIENT INDIVIDUAL retourne 403."""
+        doc = ClientCompanyDocument.objects.create(
+            company=self.company_details,
+            doc_type="RCCM",
+            file="test.pdf",
+        )
+
+        self._auth_as(self.individual_user)
+        response = self.client.delete(self.detail_url(doc.pk))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
