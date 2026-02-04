@@ -48,7 +48,7 @@ urlpatterns = [
     ),
     # Redoc (sécurisé - superuser only)
     path(
-        "api/redoc/",
+        "redoc/",
         SpectacularRedocView.as_view(
             url_name="schema",
             authentication_classes=docs_auth_classes,

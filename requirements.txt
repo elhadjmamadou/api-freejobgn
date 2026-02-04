@@ -1,5 +1,8 @@
 asgiref==3.11.0
 attrs==25.4.0
+cffi==2.0.0
+coverage==7.13.2
+cryptography==46.0.4
 Django==6.0.1
 django-cors-headers==4.9.0
 djangorestframework==3.16.1
@@ -7,10 +10,18 @@ djangorestframework_simplejwt==5.5.1
 drf-spectacular==0.29.0
 drf-spectacular-sidecar==2026.1.1
 inflection==0.5.1
+iniconfig==2.3.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
+packaging==26.0
 pillow==12.1.0
+pluggy==1.6.0
+pycparser==3.0
+Pygments==2.19.2
 PyJWT==2.11.0
+pytest==9.0.2
+pytest-cov==7.0.0
+pytest-django==4.11.1
 python-decouple==3.8
 PyYAML==6.0.3
 referencing==0.37.0
