@@ -89,6 +89,7 @@ class Project(TimeStampedModel):
     description = models.TextField()
 
     budget_band = models.CharField(max_length=20, choices=ProjectBudgetBand.choices, db_index=True)
+    budget_amount = models.DecimalField(max_digits=14, decimal_places=2)
 
     # Référentiels
     skills = models.ManyToManyField(Skill, related_name="projects", blank=True)
@@ -121,9 +122,17 @@ class Project(TimeStampedModel):
         if self.budget_band not in ProjectBudgetBand.values:
             raise ValidationError({"budget_band": "Tranche budget invalide."})
 
-        band_min, _ = BUDGET_BAND_MINMAX[self.budget_band]
-        if band_min < MIN_PROJECT_BUDGET:
-            raise ValidationError({"budget_band": "Budget minimum projet = 2 500 000."})
+        if self.budget_amount is None:
+            raise ValidationError({"budget_amount": "Le budget réel est requis."})
+
+        if self.budget_amount < MIN_PROJECT_BUDGET:
+            raise ValidationError({"budget_amount": "Budget minimum projet = 2 500 000."})
+
+        band_min, band_max = BUDGET_BAND_MINMAX[self.budget_band]
+        if self.budget_amount < band_min:
+            raise ValidationError({"budget_amount": "Le budget est inférieur à la tranche choisie."})
+        if band_max is not None and self.budget_amount > band_max:
+            raise ValidationError({"budget_amount": "Le budget dépasse la tranche choisie."})
 
     @property
     def budget_min_value(self) -> Decimal:
